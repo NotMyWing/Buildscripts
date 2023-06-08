@@ -759,41 +759,43 @@ if (cfApiKey.isPresent() || deploymentDebug.toBoolean()) {
     apply plugin: 'net.darkhax.curseforgegradle'
     //noinspection UnnecessaryQualifiedReference
     tasks.register('curseforge', net.darkhax.curseforgegradle.TaskPublishCurseForge) {
-        apiToken = cfApiKey.getOrElse('debug_token')
+        doLast {
+            apiToken = cfApiKey.getOrElse('debug_token')
 
-        def mainFile = upload(curseForgeProjectId, reobfJar)
-        def changelogFile = getChangelog()
-        def changelogRaw = changelogFile.exists() ? changelogFile.getText('UTF-8') : ""
+            def mainFile = upload(curseForgeProjectId, reobfJar)
+            def changelogFile = getChangelog()
+            def changelogRaw = changelogFile.exists() ? changelogFile.getText('UTF-8') : ""
 
-        mainFile.displayName = "${modName}: ${modVersion}"
-        mainFile.releaseType = getReleaseType()
-        mainFile.changelog = changelogRaw
-        mainFile.changelogType = 'markdown'
-        mainFile.addModLoader 'Forge'
-        mainFile.addJavaVersion "Java 8"
-        mainFile.addGameVersion minecraftVersion
+            mainFile.displayName = "${modName}: ${modVersion}"
+            mainFile.releaseType = getReleaseType()
+            mainFile.changelog = changelogRaw
+            mainFile.changelogType = 'markdown'
+            mainFile.addModLoader 'Forge'
+            mainFile.addJavaVersion "Java 8"
+            mainFile.addGameVersion minecraftVersion
 
-        if (curseForgeRelations.size() != 0) {
-            String[] deps = curseForgeRelations.split(';')
-            deps.each { dep ->
-                if (dep.size() == 0) {
-                    return
+            if (curseForgeRelations.size() != 0) {
+                String[] deps = curseForgeRelations.split(';')
+                deps.each { dep ->
+                    if (dep.size() == 0) {
+                        return
+                    }
+                    String[] parts = dep.split(':')
+                    String type = parts[0], slug = parts[1]
+                    if(!(type in ['requiredDependency', 'embeddedLibrary', 'optionalDependency', 'tool', 'incompatible'])) {
+                        throw new Exception('Invalid Curseforge dependency type: ' + type)
+                    }
+                    mainFile.addRelation(slug, type)
                 }
-                String[] parts = dep.split(':')
-                String type = parts[0], slug = parts[1]
-                if(!(type in ['requiredDependency', 'embeddedLibrary', 'optionalDependency', 'tool', 'incompatible'])) {
-                    throw new Exception('Invalid Curseforge dependency type: ' + type)
-                }
-                mainFile.addRelation(slug, type)
             }
-        }
 
-        for (artifact in getSecondaryArtifacts()) {
-            def additionalFile = mainFile.withAdditionalFile(artifact)
-            additionalFile.changelog = changelogRaw
+            for (artifact in getSecondaryArtifacts()) {
+                def additionalFile = mainFile.withAdditionalFile(artifact)
+                additionalFile.changelog = changelogRaw
+            }
+            disableVersionDetection()
+            debugMode = deploymentDebug.toBoolean()
         }
-        disableVersionDetection()
-        debugMode = deploymentDebug.toBoolean()
     }
     tasks.curseforge.dependsOn(build)
     tasks.curseforge.dependsOn('generateChangelog')
@@ -803,12 +805,10 @@ if (cfApiKey.isPresent() || deploymentDebug.toBoolean()) {
 def final modrinthApiKey = providers.environmentVariable('MODRINTH_API_KEY')
 if (modrinthApiKey.isPresent() || deploymentDebug.toBoolean()) {
     apply plugin: 'com.modrinth.minotaur'
-    def final changelogFile = getChangelog()
 
     modrinth {
         token = modrinthApiKey.getOrElse('debug_token')
         projectId = modrinthProjectId
-        changelog = changelogFile.exists() ? changelogFile.getText('UTF-8') : ""
         versionType = getReleaseType()
         versionNumber = modVersion
         gameVersions = [minecraftVersion]
@@ -816,6 +816,10 @@ if (modrinthApiKey.isPresent() || deploymentDebug.toBoolean()) {
         debugMode = deploymentDebug.toBoolean()
         uploadFile = reobfJar
         additionalFiles = getSecondaryArtifacts()
+        afterEvaluate {
+            def final changelogFile = getChangelog()
+            modrinth.changelog = changelogFile.exists() ? changelogFile.getText('UTF-8') : ""
+        }
     }
     if (modrinthRelations.size() != 0) {
         String[] deps = modrinthRelations.split(';')
